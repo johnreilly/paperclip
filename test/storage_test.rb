@@ -235,6 +235,47 @@ class StorageTest < Test::Unit::TestCase
       end
     end
   end
+  
+  context "An attachment with S3 storage and interpolated s3 headers set" do
+    setup do
+      AWS::S3::Base.stubs(:establish_connection!)
+      rebuild_model :storage => :s3,
+                    :bucket => "testing",
+                    :path => ":attachment/:style/:basename.:extension",
+                    :s3_credentials => {
+                      'access_key_id' => "12345",
+                      'secret_access_key' => "54321"
+                    },
+                    :s3_headers => {'Content-Disposition' => 'attachment; filename=":filename"'}
+    end
+
+    context "when assigned" do
+      setup do
+        @file = File.new(File.join(File.dirname(__FILE__), 'fixtures', '5k.png'), 'rb')
+        @dummy = Dummy.new
+        @dummy.avatar = @file
+      end
+
+      teardown { @file.close }
+
+      context "and saved" do
+        setup do
+          AWS::S3::Base.stubs(:establish_connection!)
+          AWS::S3::S3Object.stubs(:store).with(@dummy.avatar.path,
+                                               anything,
+                                               'testing',
+                                               :content_type => 'image/png',
+                                               :access => :public_read,
+                                               'Content-Disposition' => 'attachment; filename="5k.png"')
+          @dummy.save
+        end
+
+        should "succeed" do
+          assert true
+        end
+      end
+    end
+  end
 
   unless ENV["S3_TEST_BUCKET"].blank?
     context "Using S3 for real, an attachment with S3 storage" do
